@@ -6,7 +6,7 @@ channel_version="${channel_version%.*.*}"
 
 # Define the paths to meta.yaml and env output file
 template_file="ci/recipe/meta.yaml"
-output_file=".github/environment.yml"
+output_file="environment.yml"
 
 # Extract dependencies from the meta.yaml file
 inside_run_section=false
