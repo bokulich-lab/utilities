@@ -1,0 +1,19 @@
+repositories:
+  - name: qiime2
+    url: https://github.com/qiime2/qiime2
+  - name: q2templates
+    url: https://github.com/qiime2/q2templates
+  - name: q2cli
+    url: https://github.com/qiime2/q2cli
+  - name: q2-demux
+    url: https://github.com/qiime2/q2-demux
+  - name: q2-metadata
+    url: https://github.com/qiime2/q2-metadata
+  - name: q2-types
+    url: https://github.com/qiime2/q2-types
+  - name: q2-feature-table
+    url: https://github.com/qiime2/q2-feature-table
+  - name: q2-assembly
+    url: https://github.com/bokulich-lab/q2-assembly
+  - name: q2-moshpit
+    url: https://github.com/bokulich-lab/q2-moshpit
