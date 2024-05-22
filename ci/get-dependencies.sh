@@ -4,13 +4,17 @@
 channel_version="$2"
 channel_version="${channel_version%.*.*}"
 
-# Define the paths to meta.yaml and env output file
+# Define the paths to meta.yaml, env output file, and YAML repo file
 template_file="ci/recipe/meta.yaml"
 output_file="environment.yml"
+repo_yaml_file="$3"
+repo_urls_file="repo-urls.txt"
 
 # Extract dependencies from the meta.yaml file
 inside_run_section=false
 dependencies=""
+qiime_dependencies=""
+repo_urls=""
 
 while IFS= read -r line; do
     # If we encounter the "run:" line, set flag to true
@@ -26,6 +30,12 @@ while IFS= read -r line; do
         # Replace the pattern " {{ bowtie2 }}" with "2.5.1"
         line=$(echo "$line" | sed "s/ {{ bowtie2 }}/==2.5.1/")
         dependencies+="$line"$'\n'
+
+        # Check if the line contains qiime2 or q2 and add to qiime_dependencies
+        if [[ $line =~ ^[[:space:]]*-[[:space:]]*(q2|qiime2) ]]; then
+            package_name=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*([^=<>]+).*$/\1/')
+            qiime_dependencies+="$package_name"$'\n'
+        fi
     fi
 
     # If we encounter an empty line and we're inside the run: section, exit
@@ -33,6 +43,9 @@ while IFS= read -r line; do
         break
     fi
 done < "$template_file"
+
+# Add qcli to qiime_dependencies
+qiime_dependencies+="qcli"
 
 # Write the dependencies to the output YAML file
 cat <<EOF > "$output_file"
@@ -47,3 +60,16 @@ channels:
 dependencies:
 $dependencies
 EOF
+
+# Read the repo YAML file and extract URLs based on the qiime_dependencies
+while IFS= read -r package_name; do
+    if [[ -n "$package_name" ]]; then
+        url=$(yq ".repositories[] | select(.name == \"$package_name\") | .url" "$repo_yaml_file")
+        if [[ -n "$url" ]]; then
+            repo_urls+="$url"$'\n'
+        fi
+    fi
+done <<< "$qiime_dependencies"
+
+# Write the repo URLs to the repo-urls.txt file
+echo "$repo_urls" > "$repo_urls_file"
