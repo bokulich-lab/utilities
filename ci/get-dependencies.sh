@@ -64,9 +64,9 @@ EOF
 # Read the repo YAML file and extract URLs based on the qiime_dependencies
 while IFS= read -r package_name; do
     if [[ -n "$package_name" ]]; then
-        url=$(yq ".repositories[] | select(.name == \"$package_name\") | .url" "$repo_yaml_file")
+        url=$(yq ".repositories[] | select(.name == \"$package_name\") | .url" "$repo_yaml_file" | tr -d '"')
         if [[ -n "$url" ]]; then
-            repo_urls+="$url"$'\n'
+            repo_urls+="git+$url.git"$'\n'
         fi
     fi
 done <<< "$qiime_dependencies"
