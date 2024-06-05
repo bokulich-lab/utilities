@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Define the qiime channel version from the tag
-channel_version="$2"
-channel_version="${channel_version%.*.*}"
+channel_version=$(echo "$2" | cut -d'.' -f1-2)
 
 # Define the paths to meta.yaml, env output file, and YAML repo file
 template_file="ci/recipe/meta.yaml"
