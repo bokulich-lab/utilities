@@ -22,6 +22,11 @@ while IFS= read -r line; do
         continue
     fi
 
+    # If we encounter an empty line or a new section header and we're inside the run: section, exit
+    if [[ $inside_run_section == true && ( ! $line =~ [[:alnum:]] || $line =~ ^[[:space:]]*[a-zA-Z0-9_-]+: ) ]]; then
+        break
+    fi
+
     # If we're inside the "run:" section add line to dependencies
     if [[ $inside_run_section == true ]]; then
         # Replace the pattern " {{ qiime2_epoch }}.*" with the version tag
@@ -35,11 +40,6 @@ while IFS= read -r line; do
             package_name=$(echo "$line" | sed -E 's/^[[:space:]]*-[[:space:]]*([^=<>]+).*$/\1/')
             qiime_dependencies+="$package_name"$'\n'
         fi
-    fi
-
-    # If we encounter an empty line or a new section header and we're inside the run: section, exit
-    if [[ $inside_run_section == true && ( ! $line =~ [[:alnum:]] || $line =~ ^[[:space:]]*[a-zA-Z0-9_-]+: ) ]]; then
-        break
     fi
 done < "$template_file"
 
