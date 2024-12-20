@@ -4,7 +4,7 @@
 channel_version=$(echo "$2" | cut -d'.' -f1-2)
 
 # Define the paths to meta.yaml, env output file, and YAML repo file
-template_file="ci/recipe/meta.yaml"
+template_file="conda-recipe/meta.yaml"
 output_file="environment.yml"
 repo_yaml_file="$3"
 repo_urls_file="repo-urls.txt"
