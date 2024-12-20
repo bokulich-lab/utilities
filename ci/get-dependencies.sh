@@ -37,8 +37,8 @@ while IFS= read -r line; do
         fi
     fi
 
-    # If we encounter an empty line and we're inside the run: section, exit
-    if [[ $inside_run_section == true && ! $line =~ [[:alnum:]] ]]; then
+    # If we encounter an empty line or a new section header and we're inside the run: section, exit
+    if [[ $inside_run_section == true && ( ! $line =~ [[:alnum:]] || $line =~ ^[[:space:]]*[a-zA-Z0-9_-]+: ) ]]; then
         break
     fi
 done < "$template_file"
