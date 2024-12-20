@@ -51,7 +51,7 @@ cat <<EOF > "$output_file"
 name: conda-env
 
 channels:
-    - https://packages.qiime2.org/qiime2/$channel_version/$1/staged/
+    - https://packages.qiime2.org/qiime2/$channel_version/$1/passed/
     - conda-forge
     - bioconda
     - defaults
