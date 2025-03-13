@@ -37,7 +37,7 @@ jobs:
           pip install requests
 
           # Run the get-tags.py script with the repository name
-          python ci/get-tags.py "${{ github.repository }}"
+          python ./utilities/ci/get-tags.py "${{ github.repository }}"
 
       - name: Generate changelog
         id: generate-changelog
@@ -52,7 +52,7 @@ jobs:
           fi
 
           # Run the existing generate-changelog.sh script with the release tag and previous tag
-          ./ci/generate-changelog.sh "${{ env.RELEASE_TAG }}" "$PREVIOUS_TAG"
+          ./utilities/ci/generate-changelog.sh "${{ env.RELEASE_TAG }}" "$PREVIOUS_TAG"
 
           # Set output for next step
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
