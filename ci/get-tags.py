@@ -12,8 +12,8 @@ def get_latest_tags(repo):
 
 
 def get_latest_dev_and_stable(tags):
-    dev_tags = [tag for tag in tags if 'dev0' in tag]
-    stable_tags = [tag for tag in tags if 'dev0' not in tag]
+    dev_tags = [tag for tag in tags if 'dev' in tag]
+    stable_tags = [tag for tag in tags if 'dev' not in tag]
 
     latest_dev_tag = dev_tags[0] if dev_tags else None
     latest_stable_tag = stable_tags[0] if stable_tags else None
@@ -22,8 +22,8 @@ def get_latest_dev_and_stable(tags):
 
 
 def get_previous_dev_and_stable(tags):
-    dev_tags = [tag for tag in tags if 'dev0' in tag]
-    stable_tags = [tag for tag in tags if 'dev0' not in tag]
+    dev_tags = [tag for tag in tags if 'dev' in tag]
+    stable_tags = [tag for tag in tags if 'dev' not in tag]
 
     previous_dev_tag = dev_tags[1] if len(dev_tags) > 1 else None
     previous_stable_tag = stable_tags[1] if len(stable_tags) > 1 else None
