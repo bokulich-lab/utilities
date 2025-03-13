@@ -2,6 +2,12 @@ name: Test
 
 on:
   workflow_call:
+    inputs:
+      distro:
+        description: 'The distribution to test against'
+        required: true
+        default: tiny
+        type: string
 
 jobs:
   test:
@@ -51,7 +57,7 @@ jobs:
           else
               tag="${{ steps.fetch-tags.outputs.latest-dev-tag }}"
           fi
-          bash ./utilities/ci/get-dependencies.sh "$DISTRO" $tag ./utilities/ci/repositories.yaml
+          bash ./utilities/ci/get-dependencies.sh "${{ inputs.distro }}" $tag ./utilities/ci/repositories.yaml
           cat environment.yml >> $GITHUB_STEP_SUMMARY
           echo "qiime-deps=$(tr '\n' ' ' < repo-urls.txt | xargs)" >> $GITHUB_OUTPUT
 
