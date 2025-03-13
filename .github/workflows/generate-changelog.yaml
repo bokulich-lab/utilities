@@ -1,0 +1,67 @@
+name: Generate Changelog
+
+on:
+  workflow_call:
+    outputs:
+      changelog:
+        description: 'The generated changelog content'
+        value: ${{ jobs.generate-changelog.outputs.changelog }}
+
+jobs:
+  generate-changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.generate-changelog.outputs.changelog }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout utilities
+        uses: actions/checkout@v4
+        with:
+          repository: bokulich-lab/utilities
+          path: utilities
+
+      - name: Get release tag
+        id: get-release-tag
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+
+      - name: Get previous tags
+        id: get-tags
+        run: |
+          # Install required packages
+          pip install requests
+
+          # Run the get-tags.py script with the repository name
+          python ci/get-tags.py "${{ github.repository }}"
+
+      - name: Generate changelog
+        id: generate-changelog
+        run: |
+          # Determine the previous tag based on whether the release tag is a dev tag or a prod tag
+          if [[ "${{ env.RELEASE_TAG }}" == *".dev"* ]]; then
+            # For dev tags, use the previous dev tag
+            PREVIOUS_TAG="${{ env.PREVIOUS_DEV_TAG }}"
+          else
+            # For prod tags, use the previous stable tag
+            PREVIOUS_TAG="${{ env.PREVIOUS_STABLE_TAG }}"
+          fi
+
+          # Run the existing generate-changelog.sh script with the release tag and previous tag
+          ./ci/generate-changelog.sh "${{ env.RELEASE_TAG }}" "$PREVIOUS_TAG"
+
+          # Set output for next step
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_STEP_SUMMARY
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload changelog as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: changelog.md
