@@ -98,6 +98,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
 
       - name: Install dev versions of QIIME repos
+        if: ${{ !contains(steps.get-commit-msg.outputs.commit-msg, '[stable]') && !contains(steps.get-commit-msg.outputs.commit-msg, '[prod]') }}
         run: mamba run -n conda-env pip install ${{ steps.create-conda-yaml.outputs.qiime-deps }}
 
       - name: Update specific dependency, if requested
