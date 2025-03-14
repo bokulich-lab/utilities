@@ -43,8 +43,8 @@ while IFS= read -r line; do
     fi
 done < "$template_file"
 
-# Add qcli to qiime_dependencies
-qiime_dependencies+="q2cli"
+# Add q2cli to dependencies
+echo "    - q2cli"$'\n' > "$output_file"
 
 # Write the dependencies to the output YAML file
 cat <<EOF > "$output_file"
