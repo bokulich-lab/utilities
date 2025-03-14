@@ -57,7 +57,9 @@ jobs:
           else
               tag="${{ steps.fetch-tags.outputs.latest-dev-tag }}"
           fi
-          bash ./utilities/ci/get-dependencies.sh "${{ inputs.distro }}" $tag ./utilities/ci/repositories.yaml
+          # Extract only the year and month part (e.g., 2024.10) from the tag
+          tag_prefix=$(echo $tag | cut -d '.' -f 1,2)
+          bash ./utilities/ci/get-dependencies.sh "${{ inputs.distro }}" $tag_prefix ./utilities/ci/repositories.yaml
           cat environment.yml >> $GITHUB_STEP_SUMMARY
           echo "qiime-deps=$(tr '\n' ' ' < repo-urls.txt | xargs)" >> $GITHUB_OUTPUT
 
