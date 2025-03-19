@@ -43,7 +43,10 @@ while IFS= read -r line; do
     fi
 done < "$template_file"
 
-dependencies+="  - q2cli"$'\n'
+# Only add q2cli if it's not already present in dependencies
+if [[ "$dependencies" != *"q2cli"* ]]; then
+  dependencies+="  - q2cli"$'\n'
+fi
 
 # Write the dependencies to the output YAML file
 cat <<EOF > "$output_file"
