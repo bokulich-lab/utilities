@@ -38,7 +38,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Install dependencies
-        run: python -m pip install requests yq
+        run: python -m pip install requests yq pyyaml
 
       - name: Fetch latest tags
         id: fetch-tags
@@ -59,7 +59,7 @@ jobs:
           fi
           # Extract only the year and month part (e.g., 2024.10) from the tag
           tag_prefix=$(echo $tag | cut -d '.' -f 1,2)
-          bash ./utilities/ci/get-dependencies.sh "${{ inputs.distro }}" $tag_prefix ./utilities/ci/repositories.yaml
+          python ./utilities/ci/get-dependencies.py --distro "${{ inputs.distro }}" --version-tag $tag_prefix --repositories-yaml ./utilities/ci/repositories.yaml
           cat environment.yml >> $GITHUB_STEP_SUMMARY
           echo "qiime-deps=$(tr '\n' ' ' < repo-urls.txt | xargs)" >> $GITHUB_OUTPUT
 
