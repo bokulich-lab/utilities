@@ -2,14 +2,111 @@
 
 import argparse
 import re
+import requests
+import uuid
 
 import yaml
+
+
+def fetch_seed_environment(version_tag, distro):
+    """
+    Fetch the seed-environment-conda.yml file from GitHub and extract the dependencies.
+
+    Args:
+        version_tag (str): The version tag (e.g., "2023.5.0")
+        distro (str): The distribution type (e.g., "tiny", "moshpit")
+
+    Returns:
+        dict: A dictionary mapping package names to their versions
+    """
+    # Extract channel version from the tag (e.g., 2023.5 from 2023.5.0)
+    channel_version = '.'.join(version_tag.split('.')[:2])
+    url = f"https://raw.githubusercontent.com/qiime2/distributions/dev/{channel_version}/{distro}/passed/seed-environment-conda.yml"
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Parse the YAML content
+        seed_env = yaml.safe_load(response.text)
+
+        # Extract dependencies and their versions
+        dependencies = {}
+        for dep in seed_env.get('dependencies', []):
+            if isinstance(dep, str):  # Skip nested dependencies (like pip packages)
+                # Extract package name and version
+                parts = dep.split("=")
+                if len(parts) >= 1:
+                    package_name = parts[0]
+                    version = parts[1]
+
+                    # Remove the part following a plus symbol (inclusive) from the version
+                    # if '+' in version:
+                    #     version = version.split('+')[0]
+
+                    dependencies[package_name] = version
+        print(dependencies)
+        return dependencies
+    except (requests.RequestException, yaml.YAMLError) as e:
+        print(f"Error fetching or parsing seed environment: {e}")
+        return {}
+
+
+def preprocess_yaml_with_jinja(content):
+    """
+    Preprocess YAML content by replacing Jinja expressions with placeholders.
+    This allows the YAML parser to work with files containing Jinja expressions
+    without having to fall back to line-by-line processing.
+
+    Args:
+        content (str): The YAML content with Jinja expressions
+
+    Returns:
+        tuple: (processed_content, placeholders_map)
+            - processed_content (str): The YAML content with placeholders
+            - placeholders_map (dict): A mapping of placeholders to original Jinja expressions
+    """
+    placeholders_map = {}
+
+    # Find all Jinja expressions and replace them with placeholders
+    def replace_jinja(match):
+        jinja_expr = match.group(0)
+        placeholder = f"__JINJA_PLACEHOLDER_{uuid.uuid4().hex}__"
+        placeholders_map[placeholder] = jinja_expr
+        return placeholder
+
+    # Replace {{ ... }} expressions
+    processed_content = re.sub(r'{{[^}]+}}', replace_jinja, content)
+
+    return processed_content, placeholders_map
+
+
+def process_placeholder(placeholder, seed_dependencies):
+    """
+    Process a placeholder by replacing underscores with hyphens and looking up the version.
+
+    Args:
+        placeholder (str): The placeholder name (without {{ }})
+        seed_dependencies (dict): A dictionary mapping package names to their versions
+
+    Returns:
+        str: The version string to use for the placeholder
+    """
+    # Replace underscores with hyphens
+    package_name = placeholder.replace('_', '-')
+
+    # Look up the version in the seed dependencies
+    if package_name in seed_dependencies and seed_dependencies[package_name]:
+        return seed_dependencies[package_name]
+    else:
+        print(f"Warning: Version for {package_name} not found in seed environment")
+        return ">=0.0.0"  # Default version if not found
 
 
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Extract dependencies from a conda recipe.')
-    parser.add_argument('--distro', required=True, help='Distribution type (e.g., "staging", "main")')
+    parser.add_argument('--distro', required=True, help='Distribution type (e.g., "tiny", "moshpit")')
     parser.add_argument('--version-tag', required=True, help='Version tag (e.g., "2023.5.0")')
     parser.add_argument('--repositories-yaml', required=True, help='Path to the repositories YAML file')
     parser.add_argument('--conda-recipe', default="conda-recipe/meta.yaml", help='Path to the conda recipe template file (default: conda-recipe/meta.yaml)')
@@ -21,6 +118,9 @@ def main():
     version_tag = args.version_tag
     repositories_yaml = args.repositories_yaml
     conda_recipe = args.conda_recipe
+
+    # Fetch seed environment dependencies
+    seed_dependencies = fetch_seed_environment(version_tag, distro)
 
     # Define the paths to env output file, and repo-urls file
     output_file = "environment.yml"
@@ -40,8 +140,27 @@ def main():
 
         # Parse the YAML content
         try:
-            # Try to parse as YAML directly
-            recipe = yaml.safe_load(content)
+            # Preprocess the YAML content to handle Jinja expressions
+            processed_content, placeholders_map = preprocess_yaml_with_jinja(content)
+
+            # Try to parse the preprocessed content as YAML
+            recipe = yaml.safe_load(processed_content)
+
+            # Restore Jinja expressions in the parsed data
+            def restore_jinja_expressions(obj):
+                if isinstance(obj, str):
+                    for placeholder, jinja_expr in placeholders_map.items():
+                        if placeholder in obj:
+                            obj = obj.replace(placeholder, jinja_expr)
+                    return obj
+                elif isinstance(obj, list):
+                    return [restore_jinja_expressions(item) for item in obj]
+                elif isinstance(obj, dict):
+                    return {k: restore_jinja_expressions(v) for k, v in obj.items()}
+                else:
+                    return obj
+
+            recipe = restore_jinja_expressions(recipe)
 
             # Extract dependencies from the run section
             if 'requirements' in recipe and 'run' in recipe['requirements']:
@@ -49,14 +168,19 @@ def main():
 
                 for dep in run_deps:
                     # Replace Jinja2 templates
-                    if "{{ qiime2_epoch }}" in dep:
-                        dep = re.sub(r' {{ qiime2_epoch }}.*', f'=={version_tag}*', dep)
-                    if "{{ bowtie2 }}" in dep:
-                        dep = re.sub(r' {{ bowtie2 }}', '==2.5.1', dep)
-                    if "{{ pysam }}" in line:
-                        line = re.sub(r' {{ pysam }}', '==0.22.1', line)
-                    if "{{ spades }}" in line:
-                        line = re.sub(r' {{ spades }}', '==4.0.0', line)
+                    # Find all placeholders in the format {{ placeholder }}
+                    placeholders = re.findall(r'{{ ([^}]+) }}', dep)
+                    for placeholder in placeholders:
+                        version = process_placeholder(placeholder, seed_dependencies)
+                        # Check if there's already an operator before the placeholder
+                        operator_match = re.search(r'([=<>]+)\s*{{ ' + re.escape(placeholder) + r' }}', dep)
+                        if operator_match:
+                            # If there's already an operator, use it
+                            operator = operator_match.group(1)
+                            dep = re.sub(r'[=<>]+\s*{{ ' + re.escape(placeholder) + r' }}', f"{operator}{version}", dep)
+                        else:
+                            # Otherwise, add the >= operator
+                            dep = re.sub(r' {{ ' + re.escape(placeholder) + r' }}', f">={version}", dep)
 
                     dependencies.append(dep)
 
@@ -64,41 +188,11 @@ def main():
                     if re.match(r'^(q2|qiime2)', dep.strip().split()[0]):
                         package_name = dep.strip().split()[0]
                         qiime_dependencies.append(package_name)
-        except yaml.YAMLError:
-            # If YAML parsing fails, fall back to line-by-line processing
-            inside_run_section = False
-
-            with open(conda_recipe, 'r') as f:
-                for line in f:
-                    line = line.rstrip()
-
-                    # Check if we're entering the run section
-                    if re.match(r'^\s*run:', line):
-                        inside_run_section = True
-                        continue
-
-                    # Check if we're exiting the run section
-                    if inside_run_section and (not re.search(r'[a-zA-Z0-9]', line) or re.match(r'^\s*[a-zA-Z0-9_-]+:', line)):
-                        break
-
-                    # Process dependencies in the run section
-                    if inside_run_section:
-                        # Replace Jinja2 templates
-                        if "{{ qiime2_epoch }}" in line:
-                            line = re.sub(r' {{ qiime2_epoch }}.*', f'=={version_tag}*', line)
-                        if "{{ bowtie2 }}" in line:
-                            line = re.sub(r' {{ bowtie2 }}', '==2.5.1', line)
-                        if "{{ pysam }}" in line:
-                            line = re.sub(r' {{ pysam }}', '==0.22.1', line)
-                        if "{{ spades }}" in line:
-                            line = re.sub(r' {{ spades }}', '==4.0.0', line)
-
-                        dependencies.append(line)
-
-                        # Check if the dependency is a QIIME2 package
-                        if re.match(r'^\s*-\s*(q2|qiime2)', line):
-                            package_name = re.sub(r'^\s*-\s*([^=<>]+).*$', r'\1', line)
-                            qiime_dependencies.append(package_name)
+        except yaml.YAMLError as e:
+            # Provide a meaningful error message for YAML parsing issues
+            error_message = f"Error parsing YAML in conda recipe '{conda_recipe}':\n{e}\n"
+            error_message += "Please check the YAML syntax in the conda recipe file."
+            raise RuntimeError(error_message)
 
     # Only add q2cli if it's not already present in dependencies
     q2cli_present = any("q2cli" in dep for dep in dependencies)
