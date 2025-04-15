@@ -121,7 +121,7 @@ jobs:
           mamba run -n conda-env qiime dev refresh-cache
 
       - name: Install dev dependencies
-        run: mamba run -n conda-env pip install pytest pytest-cov coverage parameterized
+        run: mamba run -n conda-env pip install pytest pytest-cov coverage parameterized pytest=xdist
 
       - name: Run tests
         id: test
