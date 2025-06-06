@@ -1,0 +1,20 @@
+name: Dependencies
+
+on:
+  workflow_call:
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if “dependency-update” label exists
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const forbidden = "dependency-update";
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            if (labels.includes(forbidden)) {
+              core.setFailed(`🚫 Merge blocked: label “${forbidden}” is still on this PR.`);
+            }
+
+  
