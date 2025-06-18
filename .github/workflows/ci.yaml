@@ -8,14 +8,31 @@ on:
         required: true
         default: tiny
         type: string
+      plugin_name:
+        description: 'Name of the plugin'
+        required: true
+        default: qiime2
+        type: string
+      build_docker:
+        description: 'Whether to build Docker image'
+        required: false
+        default: false
+        type: boolean
+      push_pr_image:
+        description: 'Whether to push PR images to registry'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   test:
     runs-on: ubuntu-latest
     outputs:
-      latest-dev-tag: ${{ steps.fetch_latest_tags.outputs.latest-dev-tag }}
-      latest-stable-tag: ${{ steps.fetch_latest_tags.outputs.latest-stable-tag }}
+      latest-dev-tag: ${{ steps.fetch-tags.outputs.latest-dev-tag }}
+      latest-stable-tag: ${{ steps.fetch-tags.outputs.latest-stable-tag }}
       commit-msg: ${{ steps.get-commit-msg.outputs.commit-msg }}
+      epoch: ${{ steps.create-conda-yaml.outputs.epoch }}
+      qiime-deps: ${{ steps.create-conda-yaml.outputs.qiime-deps }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,8 +62,12 @@ jobs:
         run: |
           latest_tags=$(python ./utilities/ci/get-tags.py)
           echo "$latest_tags" > tags.txt
-          echo "latest-dev-tag=$(grep 'latest-dev-tag' tags.txt | cut -d '=' -f 2)" >> $GITHUB_OUTPUT
-          echo "latest-stable-tag=$(grep 'latest-stable-tag' tags.txt | cut -d '=' -f 2)" >> $GITHUB_OUTPUT
+          
+          latest_dev_tag=$(grep 'latest-dev-tag' tags.txt | cut -d '=' -f 2)
+          latest_stable_tag=$(grep 'latest-stable-tag' tags.txt | cut -d '=' -f 2)
+          
+          echo "latest-dev-tag=$latest_dev_tag" >> $GITHUB_OUTPUT
+          echo "latest-stable-tag=$latest_stable_tag" >> $GITHUB_OUTPUT
 
       - name: Create conda yaml
         id: create-conda-yaml
@@ -62,6 +83,7 @@ jobs:
           python ./utilities/ci/get-dependencies.py --distro "${{ inputs.distro }}" --version-tag $tag_prefix --repositories-yaml ./utilities/ci/repositories.yaml
           cat environment.yml >> $GITHUB_STEP_SUMMARY
           echo "qiime-deps=$(tr '\n' ' ' < repo-urls.txt | xargs)" >> $GITHUB_OUTPUT
+          echo "epoch=$tag_prefix" >> $GITHUB_OUTPUT
 
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -72,7 +94,6 @@ jobs:
           channel-priority: true
           activate-environment: conda-env
           condarc-file: ./utilities/ci/condarc
-          # use-only-tar-bz2: true
 
       - name: Get date
         id: get-date
@@ -86,8 +107,7 @@ jobs:
           key:
             conda-${{ runner.os }}--${{ runner.arch }}--${{
             steps.get-date.outputs.today }}-${{
-            hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER
-            }}
+            hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
         env:
           # Increase this value to reset cache if environment.yml has not changed
           CACHE_NUMBER: 0
@@ -127,9 +147,84 @@ jobs:
         id: test
         run: mamba run -n conda-env make test-cov
 
-      - name: Upload artifacts
+      - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         if: steps.test.outcome == 'success'
         with:
           name: coverage
           path: coverage.xml
+
+      - name: Upload environment yaml
+        uses: actions/upload-artifact@v4
+        if: steps.test.outcome == 'success' && inputs.build_docker
+        with:
+          name: environment
+          path: environment.yml
+
+  build-and-push-docker:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ inputs.build_docker }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download environment.yml
+        uses: actions/download-artifact@v4
+        with:
+          name: environment
+          path: .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to the remote registry
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build the test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' || inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]') }}
+          load: true
+          tags: |
+            ${{ github.sha }}
+            ${{ (github.event_name == 'pull_request' && (inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]'))) && format('quay.io/{0}:pr-{1}-{2}', github.repository, github.event.number, substring(github.sha, 0, 8)) || '' }}
+          target: test
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+          build-args: |
+            EPOCH=${{ needs.test.outputs.epoch }}
+            DISTRO=tiny
+            ENVIRONMENT=passed
+            PLUGIN_NAME=${{ inputs.plugin_name }}
+
+      - name: Test plugin installation
+        run: docker run ${{ github.sha }} make -f ./plugin/Makefile test-docker
+
+      - name: Run tests in the container
+        run: docker run --rm ${{ github.sha }}
+
+      - name: Build and push production image
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: quay.io/${{ github.repository }}:${{ needs.test.outputs.epoch }}-${{ substring(github.sha, 0, 8) }}
+          target: prod
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+          build-args: |
+            EPOCH=${{ needs.test.outputs.epoch }}
+            DISTRO=tiny
+            ENVIRONMENT=passed
+            PLUGIN_NAME=${{ inputs.plugin_name }}
+            
