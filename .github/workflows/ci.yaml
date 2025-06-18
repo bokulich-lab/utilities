@@ -252,7 +252,7 @@ jobs:
         run: |
           cat > build-metadata.json << EOF
           {
-            "repository": "${{ github.repository }}",
+            "repository": "${{ github.event.repository.name }}",
             "sha": "${{ github.sha }}",
             "short_sha": "${{ steps.short-sha.outputs.short-sha }}",
             "epoch": "${{ needs.test.outputs.epoch }}",
