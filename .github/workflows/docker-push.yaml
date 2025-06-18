@@ -1,25 +1,33 @@
 name: Docker Push
 
 on:
-  workflow_run:
-    workflows: ["Test"]  # Replace with the name of your calling workflow
-    types:
-      - completed
+  workflow_call:
+    inputs:
+      run_id:
+        description: 'The workflow run ID that generated the Docker artifacts'
+        required: true
+        type: string
+      repository:
+        description: 'Repository name (owner/repo)'
+        required: true
+        type: string
 
 jobs:
   push-docker-images:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Download build metadata
         uses: actions/github-script@v7
         with:
           script: |
-            // Get artifacts from the triggering workflow run
+            // Parse repository owner/name
+            const [owner, repo] = '${{ inputs.repository }}'.split('/');
+            
+            // Get artifacts from the specified workflow run
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
+              owner: owner,
+              repo: repo,
+              run_id: '${{ inputs.run_id }}',
             });
 
             // Find build metadata artifact
@@ -34,8 +42,8 @@ jobs:
 
             // Download the metadata
             const download = await github.rest.actions.downloadArtifact({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: owner,
+              repo: repo,
               artifact_id: metadataArtifact.id,
               archive_format: 'zip',
             });
@@ -88,11 +96,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Parse repository owner/name
+            const [owner, repo] = '${{ inputs.repository }}'.split('/');
+            
             // Download test image artifact
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
+              owner: owner,
+              repo: repo,
+              run_id: '${{ inputs.run_id }}',
             });
 
             const testImageArtifact = artifacts.data.artifacts.find(
@@ -101,8 +112,8 @@ jobs:
 
             if (testImageArtifact) {
               const download = await github.rest.actions.downloadArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner: owner,
+                repo: repo,
                 artifact_id: testImageArtifact.id,
                 archive_format: 'zip',
               });
@@ -139,11 +150,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Parse repository owner/name
+            const [owner, repo] = '${{ inputs.repository }}'.split('/');
+            
             // Download production image artifact
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
+              owner: owner,
+              repo: repo,
+              run_id: '${{ inputs.run_id }}',
             });
 
             const prodImageArtifact = artifacts.data.artifacts.find(
@@ -152,8 +166,8 @@ jobs:
 
             if (prodImageArtifact) {
               const download = await github.rest.actions.downloadArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
+                owner: owner,
+                repo: repo,
                 artifact_id: prodImageArtifact.id,
                 archive_format: 'zip',
               });
