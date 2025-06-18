@@ -10,8 +10,8 @@ on:
         type: string
       plugin_name:
         description: 'Name of the plugin'
-        required: true
-        default: qiime2
+        required: false
+        default: ${{ github.repository }}
         type: string
       build_docker:
         description: 'Whether to build Docker image'
