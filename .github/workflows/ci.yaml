@@ -170,6 +170,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Get short SHA
+        id: short-sha
+        run: echo "short-sha=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
+
       - name: Download environment.yml
         uses: actions/download-artifact@v4
         with:
@@ -195,7 +199,7 @@ jobs:
           load: true
           tags: |
             ${{ github.sha }}
-            ${{ (github.event_name == 'pull_request' && (inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]'))) && format('quay.io/{0}:pr-{1}-{2}', github.repository, github.event.number, substring(github.sha, 0, 8)) || '' }}
+            ${{ (github.event_name == 'pull_request' && (inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]'))) && format('quay.io/{0}:pr-{1}-{2}', github.repository, github.event.number, steps.short-sha.outputs.short-sha) || '' }}
           target: test
           cache-from: type=gha
           cache-to: type=gha,mode=min
@@ -218,7 +222,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: quay.io/${{ github.repository }}:${{ needs.test.outputs.epoch }}-${{ substring(github.sha, 0, 8) }}
+          tags: quay.io/${{ github.repository }}:${{ needs.test.outputs.epoch }}-${{ steps.short-sha.outputs.short-sha }}
           target: prod
           cache-from: type=gha
           cache-to: type=gha,mode=min
