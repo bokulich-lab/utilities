@@ -191,7 +191,6 @@ jobs:
           cache-to: type=gha,mode=min
           build-args: |
             EPOCH=${{ needs.test.outputs.epoch }}
-            DISTRO=tiny
             ENVIRONMENT=passed
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
@@ -220,7 +219,6 @@ jobs:
           cache-to: type=gha,mode=min
           build-args: |
             EPOCH=${{ needs.test.outputs.epoch }}
-            DISTRO=tiny
             ENVIRONMENT=passed
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
