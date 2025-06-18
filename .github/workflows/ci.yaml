@@ -18,11 +18,6 @@ on:
         required: false
         default: false
         type: boolean
-      push_pr_image:
-        description: 'Whether to push PR images to registry'
-        required: false
-        default: false
-        type: boolean
 
 jobs:
   test:
@@ -156,15 +151,15 @@ jobs:
 
       - name: Upload environment yaml
         uses: actions/upload-artifact@v4
-        if: steps.test.outcome == 'success' && inputs.build_docker
+        if: steps.test.outcome == 'success' && inputs.build_docker && (github.event_name == 'push' && github.ref == 'refs/heads/main' || contains(steps.get-commit-msg.outputs.commit-msg, '[build-image]'))
         with:
           name: environment
           path: environment.yml
 
-  build-and-push-docker:
+  build-docker:
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ inputs.build_docker }}
+    if: ${{ inputs.build_docker && (github.event_name == 'push' && github.ref == 'refs/heads/main' || contains(needs.test.outputs.commit-msg, '[build-image]')) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -207,7 +202,7 @@ jobs:
         run: docker run --rm ${{ github.sha }}
 
       - name: Save test image as tarball
-        if: ${{ inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]') }}
+        if: ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }}
         run: |
           docker save ${{ github.sha }} | gzip > test-image.tar.gz
 
@@ -230,7 +225,7 @@ jobs:
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
       - name: Upload test image artifact
-        if: ${{ inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]') }}
+        if: ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }}
         uses: actions/upload-artifact@v4
         with:
           name: test-docker-image
@@ -258,7 +253,7 @@ jobs:
             "ref": "${{ github.ref }}",
             "event_name": "${{ github.event_name }}",
             "pr_number": "${{ github.event.number }}",
-            "push_pr_image": ${{ inputs.push_pr_image || contains(needs.test.outputs.commit-msg, '[push-image]') }},
+            "build_pr_image": ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }},
             "is_main_push": ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           }
           EOF
