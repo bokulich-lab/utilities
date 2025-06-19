@@ -201,7 +201,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
           build-args: |
-            EPOCH=${{ needs.test.outputs.epoch }}
+            EPOCH=${{ needs.test.outputs.tag }}
             ENVIRONMENT=passed
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
@@ -211,7 +211,7 @@ jobs:
       - name: Run tests in the container
         run: docker run --rm ${{ github.sha }}
 
-      - name: Save test image as tarball
+      - name: Save test image as tarballß
         if: ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }}
         run: |
           docker save ${{ github.sha }} | gzip > test-image.tar.gz
@@ -229,7 +229,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
           build-args: |
-            EPOCH=${{ needs.test.outputs.epoch }}
+            EPOCH=${{ needs.test.outputs.tag }}
             ENVIRONMENT=passed
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
