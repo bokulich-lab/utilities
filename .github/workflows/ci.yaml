@@ -35,6 +35,7 @@ jobs:
       latest-dev-tag: ${{ steps.fetch-tags.outputs.latest-dev-tag }}
       latest-stable-tag: ${{ steps.fetch-tags.outputs.latest-stable-tag }}
       commit-msg: ${{ steps.get-commit-msg.outputs.commit-msg }}
+      tag: ${{ steps.create-conda-yaml.outputs.tag }}
       epoch: ${{ steps.create-conda-yaml.outputs.epoch }}
       qiime-deps: ${{ steps.create-conda-yaml.outputs.qiime-deps }}
     steps:
@@ -88,6 +89,7 @@ jobs:
           cat environment.yml >> $GITHUB_STEP_SUMMARY
           echo "qiime-deps=$(tr '\n' ' ' < repo-urls.txt | xargs)" >> $GITHUB_OUTPUT
           echo "epoch=$tag_prefix" >> $GITHUB_OUTPUT
+          echo "tag=$tag" >> $GITHUB_OUTPUT
 
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -255,7 +257,7 @@ jobs:
             "repository": "${{ github.event.repository.name }}",
             "sha": "${{ github.sha }}",
             "short_sha": "${{ steps.short-sha.outputs.short-sha }}",
-            "epoch": "${{ needs.test.outputs.epoch }}",
+            "epoch": "${{ needs.test.outputs.tag }}",
             "commit_msg": ${{ toJSON(needs.test.outputs.commit-msg) }},
             "ref": "${{ github.ref }}",
             "event_name": "${{ github.event_name }}",
