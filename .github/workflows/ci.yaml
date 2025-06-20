@@ -180,6 +180,11 @@ jobs:
         id: short-sha
         run: echo "short-sha=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
 
+      - name: Get tag name
+        id: tag-name
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Download environment.yml
         uses: actions/download-artifact@v4
         with:
@@ -190,6 +195,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build the test image
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -206,9 +212,11 @@ jobs:
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
       - name: Test plugin installation
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: docker run ${{ github.sha }} make -f ./plugin/Makefile test-docker
 
       - name: Run tests in the container
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: docker run --rm ${{ github.sha }}
 
       - name: Save test image as tarballß
@@ -224,7 +232,7 @@ jobs:
           file: ./Dockerfile
           push: false
           outputs: type=docker,dest=prod-image.tar
-          tags: temp-prod-image
+          tags: ${{ startsWith(github.ref, 'refs/tags/') && steps.tag-name.outputs.tag || format('main-{0}', steps.short-sha.outputs.short-sha) }}
           target: prod
           cache-from: type=gha
           cache-to: type=gha,mode=min
@@ -262,6 +270,8 @@ jobs:
             "ref": "${{ github.ref }}",
             "event_name": "${{ github.event_name }}",
             "pr_number": "${{ github.event.number }}",
+            "tag_name": "${{ steps.tag-name.outputs.tag || '' }}",
+            "is_tag_push": ${{ startsWith(github.ref, 'refs/tags/') }},
             "build_pr_image": ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }},
             "is_main_push": ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
           }
