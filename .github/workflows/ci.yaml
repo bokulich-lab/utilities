@@ -180,11 +180,6 @@ jobs:
         id: short-sha
         run: echo "short-sha=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
 
-      - name: Get tag name
-        id: tag-name
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
       - name: Download environment.yml
         uses: actions/download-artifact@v4
         with:
@@ -219,7 +214,7 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: docker run --rm ${{ github.sha }}
 
-      - name: Save test image as tarballß
+      - name: Save test image as tarball
         if: ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }}
         run: |
           docker save ${{ github.sha }} | gzip > test-image.tar.gz
@@ -232,7 +227,7 @@ jobs:
           file: ./Dockerfile
           push: false
           outputs: type=docker,dest=prod-image.tar
-          tags: ${{ startsWith(github.ref, 'refs/tags/') && steps.tag-name.outputs.tag || format('main-{0}', steps.short-sha.outputs.short-sha) }}
+          tags: temp-prod-image
           target: prod
           cache-from: type=gha
           cache-to: type=gha,mode=min
@@ -260,6 +255,16 @@ jobs:
       - name: Create build metadata
         if: ${{ inputs.build_docker }}
         run: |
+          # Extract tag name if this is a tag push
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            tag_name="${{ github.ref }}"
+            tag_name="${tag_name#refs/tags/}"
+            is_tag_push=true
+          else
+            tag_name=""
+            is_tag_push=false
+          fi
+          
           cat > build-metadata.json << EOF
           {
             "repository": "${{ github.event.repository.name }}",
@@ -270,8 +275,8 @@ jobs:
             "ref": "${{ github.ref }}",
             "event_name": "${{ github.event_name }}",
             "pr_number": "${{ github.event.number }}",
-            "tag_name": "${{ steps.tag-name.outputs.tag || '' }}",
-            "is_tag_push": ${{ startsWith(github.ref, 'refs/tags/') }},
+            "tag_name": "$tag_name",
+            "is_tag_push": $is_tag_push,
             "build_pr_image": ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }},
             "is_main_push": ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
           }
