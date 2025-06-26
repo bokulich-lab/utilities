@@ -167,6 +167,13 @@ jobs:
           name: environment
           path: environment.yml
 
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: true
+          verbose: true
+
   build-docker:
     runs-on: ubuntu-latest
     needs: test
