@@ -56,6 +56,7 @@ channels:
     - https://packages.qiime2.org/qiime2/$channel_version/$1/passed/
     - conda-forge
     - bioconda
+    - rischv
     - defaults
 
 dependencies:

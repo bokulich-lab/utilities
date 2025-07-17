@@ -206,6 +206,7 @@ def main():
             f'https://packages.qiime2.org/qiime2/{channel_version}/{distro}/passed/',
             'conda-forge',
             'bioconda',
+            'rischv',
             'defaults'
         ],
         'dependencies': []
