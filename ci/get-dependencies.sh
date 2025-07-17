@@ -57,6 +57,7 @@ channels:
     - conda-forge
     - bioconda
     - defaults
+    - rischv
 
 dependencies:
 $dependencies
