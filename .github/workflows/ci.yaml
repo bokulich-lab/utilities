@@ -122,7 +122,7 @@ jobs:
         id: cache
 
       - name: Update environment
-        run: mamba env update -n conda-env -f environment.yml
+        run: conda env update -n conda-env -f environment.yml
         if: steps.cache.outputs.cache-hit != 'true'
 
       - name: Install dev versions of QIIME repos
