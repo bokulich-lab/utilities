@@ -31,6 +31,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      MAMBA_NO_LOW_SPEED_LIMIT: "1"
     outputs:
       latest-dev-tag: ${{ steps.fetch-tags.outputs.latest-dev-tag }}
       latest-stable-tag: ${{ steps.fetch-tags.outputs.latest-stable-tag }}
