@@ -206,7 +206,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build the test image
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -220,6 +220,7 @@ jobs:
           build-args: |
             EPOCH=${{ needs.test.outputs.tag }}
             ENVIRONMENT=passed
+            LABEL=quay.expires-after=4w
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
       - name: Test plugin installation
