@@ -236,8 +236,26 @@ jobs:
         run: |
           docker save ${{ github.sha }} | gzip > test-image.tar.gz
 
-      - name: Build production image
-        if: ${{ (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'release' && github.event.action == 'published') }}
+      - name: Build production image (dev tag, expires in 4 weeks)
+        if: ${{ ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'release' && github.event.action == 'published')) && contains(needs.test.outputs.tag, 'dev') }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          outputs: type=docker,dest=prod-image.tar
+          tags: temp-prod-image
+          target: prod
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
+          build-args: |
+            EPOCH=${{ needs.test.outputs.tag }}
+            ENVIRONMENT=passed
+            LABEL=quay.expires-after=4w
+            PLUGIN_NAME=${{ inputs.plugin_name }}
+
+      - name: Build production image (stable/prod tag, no expiry)
+        if: ${{ ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'release' && github.event.action == 'published')) && !contains(needs.test.outputs.tag, 'dev') }}
         uses: docker/build-push-action@v6
         with:
           context: .
