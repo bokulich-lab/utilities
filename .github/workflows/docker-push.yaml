@@ -87,7 +87,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Download test image artifact
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.build-pr-image == 'true'
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name != 'release' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
         uses: actions/download-artifact@v4
         with:
           name: test-docker-image
@@ -96,15 +96,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Load and push test image
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.build-pr-image == 'true'
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name != 'release' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
         run: |
           if [ -f "test-image.tar.gz" ]; then
             # Load the image
             docker load < test-image.tar.gz
           
-            # Determine the tag based on event type
+            # Determine the tag based on event/ref type
             if [ "${{ steps.metadata.outputs.event-name }}" = "pull_request" ]; then
               TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:pr-${{ steps.metadata.outputs.pr-number }}-${{ steps.metadata.outputs.short-sha }}"
+            elif [ "${{ steps.metadata.outputs.is-tag-push }}" = "true" ]; then
+              TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:${{ steps.metadata.outputs.tag-name }}"
+            elif [ "${{ steps.metadata.outputs.is-main-push }}" = "true" ]; then
+              TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:${{ steps.metadata.outputs.epoch }}-${{ steps.metadata.outputs.short-sha }}"
             else
               TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:test-${{ steps.metadata.outputs.short-sha }}"
             fi
@@ -118,7 +122,7 @@ jobs:
           fi
 
       - name: Download production image artifact
-        if: steps.metadata.outputs.has-metadata == 'true' && (steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name == 'release'
         uses: actions/download-artifact@v4
         with:
           name: prod-docker-image
@@ -127,18 +131,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Load and push production image
-        if: steps.metadata.outputs.has-metadata == 'true' && (steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name == 'release'
         run: |
           if [ -f "prod-image.tar" ]; then
             # Load the image
             docker load < prod-image.tar
           
-            # Determine the tag based on whether this is a tag push or main branch push
-            if [ "${{ steps.metadata.outputs.is-tag-push }}" = "true" ]; then
-              # For tag pushes, use just the tag name (no hash suffix)
+            # Release images are always pushed as the release tag
+            if [ -n "${{ steps.metadata.outputs.tag-name }}" ]; then
               TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:${{ steps.metadata.outputs.tag-name }}"
             else
-              # For main branch pushes, use epoch + hash
               TAG="quay.io/bokulichlab/${{ steps.metadata.outputs.repository }}:${{ steps.metadata.outputs.epoch }}-${{ steps.metadata.outputs.short-sha }}"
             fi
           
