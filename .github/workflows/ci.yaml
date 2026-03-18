@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      is_release:
+        description: 'Whether this run corresponds to a published release'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   black:
@@ -164,7 +169,7 @@ jobs:
 
       - name: Upload environment yaml
         uses: actions/upload-artifact@v4
-        if: steps.test.outcome == 'success' && inputs.build_docker && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'release' && github.event.action == 'published') || contains(steps.get-commit-msg.outputs.commit-msg, '[build-image]'))
+        if: steps.test.outcome == 'success' && inputs.build_docker && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) || inputs.is_release || contains(steps.get-commit-msg.outputs.commit-msg, '[build-image]'))
         with:
           name: environment
           path: environment.yml
@@ -181,7 +186,7 @@ jobs:
   build-docker:
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ inputs.build_docker && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'release' && github.event.action == 'published') || contains(needs.test.outputs.commit-msg, '[build-image]')) }}
+    if: ${{ inputs.build_docker && (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) || inputs.is_release || contains(needs.test.outputs.commit-msg, '[build-image]')) }}
     steps:
       - name: Make some room
         run: |
@@ -205,8 +210,37 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Determine release context
+        id: release-context
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          is_release=false
+
+          if [[ "${{ inputs.is_release }}" == "true" ]]; then
+            is_release=true
+          elif [[ "${{ github.event_name }}" == "release" && "${{ github.event.action }}" == "published" ]]; then
+            is_release=true
+          elif [[ -n "${{ github.event.release.tag_name }}" && "${{ github.event.action }}" == "published" ]]; then
+            is_release=true
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            tag_name="${{ github.ref }}"
+            tag_name="${tag_name#refs/tags/}"
+            api_url="${{ github.api_url }}/repos/${{ github.repository }}/releases/tags/${tag_name}"
+            http_code=$(curl -sS -o release.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "$api_url" || true)
+
+            if [[ "$http_code" == "200" ]] && jq -e '.draft == false' release.json > /dev/null; then
+              is_release=true
+            fi
+          fi
+
+          echo "is-release=$is_release" >> $GITHUB_OUTPUT
+
       - name: Build the test/dev image
-        if: ${{ github.event_name != 'release' }}
+        if: ${{ steps.release-context.outputs.is-release != 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -232,12 +266,12 @@ jobs:
         run: docker run --rm ${{ github.sha }}
 
       - name: Save test image as tarball
-        if: ${{ github.event_name != 'release' && ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]'))) }}
+        if: ${{ steps.release-context.outputs.is-release != 'true' && ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]'))) }}
         run: |
           docker save ${{ github.sha }} | gzip > test-image.tar.gz
 
       - name: Build production image
-        if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        if: ${{ steps.release-context.outputs.is-release == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -254,7 +288,7 @@ jobs:
             PLUGIN_NAME=${{ inputs.plugin_name }}
 
       - name: Upload test image artifact
-        if: ${{ github.event_name != 'release' && ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]'))) }}
+        if: ${{ steps.release-context.outputs.is-release != 'true' && ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))) || (github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]'))) }}
         uses: actions/upload-artifact@v4
         with:
           name: test-docker-image
@@ -262,7 +296,7 @@ jobs:
           retention-days: 2
 
       - name: Upload production image artifact
-        if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+        if: ${{ steps.release-context.outputs.is-release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: prod-docker-image
@@ -272,8 +306,11 @@ jobs:
       - name: Create build metadata
         if: ${{ inputs.build_docker }}
         run: |
-          # Extract tag name if this is a tag push
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          # Prefer release tag name when available, otherwise derive from tag refs.
+          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            tag_name="${{ github.event.release.tag_name }}"
+            is_tag_push=true
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             tag_name="${{ github.ref }}"
             tag_name="${tag_name#refs/tags/}"
             is_tag_push=true
@@ -295,7 +332,8 @@ jobs:
             "tag_name": "$tag_name",
             "is_tag_push": $is_tag_push,
             "build_pr_image": ${{ github.event_name == 'pull_request' && contains(needs.test.outputs.commit-msg, '[build-image]') }},
-            "is_main_push": ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            "is_main_push": ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }},
+            "is_release": ${{ steps.release-context.outputs.is-release == 'true' }}
           }
           EOF
 

@@ -62,6 +62,7 @@ jobs:
               echo "is-tag-push=$(jq -r '.is_tag_push' build-metadata.json)" >> $GITHUB_OUTPUT
               echo "build-pr-image=$(jq -r '.build_pr_image' build-metadata.json)" >> $GITHUB_OUTPUT
               echo "is-main-push=$(jq -r '.is_main_push' build-metadata.json)" >> $GITHUB_OUTPUT
+              echo "is-release=$(jq -r '.is_release' build-metadata.json)" >> $GITHUB_OUTPUT
               echo "has-metadata=true" >> $GITHUB_OUTPUT
               
               # Display metadata for debugging
@@ -87,7 +88,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Download test image artifact
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name != 'release' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.is-release != 'true' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
         uses: actions/download-artifact@v4
         with:
           name: test-docker-image
@@ -96,7 +97,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Load and push test image
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name != 'release' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.is-release != 'true' && (steps.metadata.outputs.build-pr-image == 'true' || steps.metadata.outputs.is-main-push == 'true' || steps.metadata.outputs.is-tag-push == 'true')
         run: |
           if [ -f "test-image.tar.gz" ]; then
             # Load the image
@@ -122,7 +123,7 @@ jobs:
           fi
 
       - name: Download production image artifact
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name == 'release'
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.is-release == 'true'
         uses: actions/download-artifact@v4
         with:
           name: prod-docker-image
@@ -131,7 +132,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Load and push production image
-        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.event-name == 'release'
+        if: steps.metadata.outputs.has-metadata == 'true' && steps.metadata.outputs.is-release == 'true'
         run: |
           if [ -f "prod-image.tar" ]; then
             # Load the image
