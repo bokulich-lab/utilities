@@ -21,7 +21,7 @@ def fetch_seed_environment(version_tag, distro):
     """
     # Extract channel version from the tag (e.g., 2023.5 from 2023.5.0)
     channel_version = '.'.join(version_tag.split('.')[:2])
-    url = f"https://raw.githubusercontent.com/qiime2/distributions/dev/{channel_version}/{distro}/passed/seed-environment-conda.yml"
+    url = f"https://raw.githubusercontent.com/qiime2/distributions/dev/{channel_version}/{distro}/passed/seed-environment-conda-linux.yml"
 
     try:
         response = requests.get(url)
