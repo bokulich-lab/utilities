@@ -15,5 +15,7 @@ repositories:
     url: https://github.com/qiime2/q2-feature-table
   - name: q2-assembly
     url: https://github.com/bokulich-lab/q2-assembly
-  - name: q2-moshpit
-    url: https://github.com/bokulich-lab/q2-moshpit
+  - name: q2-annotate
+    url: https://github.com/bokulich-lab/q2-annotate
+  - name: q2-mag
+    url: https://github.com/bokulich-lab/q2-mag
