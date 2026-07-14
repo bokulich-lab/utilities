@@ -1,0 +1,129 @@
+name: Test environment files
+
+on:
+  workflow_call:
+    inputs:
+      environment_dir:
+        description: 'Directory containing conda environment YAML files'
+        required: false
+        default: environment-files
+        type: string
+      test_all:
+        description: 'Test every env file in the directory instead of only changed ones'
+        required: false
+        default: false
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      environment_dir:
+        description: 'Directory containing conda environment YAML files'
+        required: false
+        default: environment-files
+        type: string
+      test_all:
+        description: 'Test every env file in the directory instead of only changed ones'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      has-files: ${{ steps.files.outputs.has-files }}
+      files: ${{ steps.files.outputs.files }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environment files
+        if: ${{ inputs.test_all == false }}
+        uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          list-files: json
+          filters: |
+            env_files:
+              - '${{ inputs.environment_dir }}/**/*.yml'
+              - '${{ inputs.environment_dir }}/**/*.yaml'
+
+      - name: Build test matrix
+        id: files
+        env:
+          TEST_ALL: ${{ inputs.test_all }}
+          CHANGED_FILES: ${{ steps.filter.outputs.env_files_files }}
+          ENV_DIR: ${{ inputs.environment_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -d "$ENV_DIR" ]]; then
+            echo "::error::Environment directory '$ENV_DIR' does not exist"
+            exit 1
+          fi
+
+          declare -a candidates=()
+
+          if [[ "$TEST_ALL" == "true" ]]; then
+            echo "test_all=true; collecting all env files under $ENV_DIR"
+            mapfile -t candidates < <(
+              find "$ENV_DIR" -type f \( -name '*.yml' -o -name '*.yaml' \) | sort
+            )
+          else
+            echo "Collecting changed env files from paths-filter"
+            mapfile -t candidates < <(
+              echo "${CHANGED_FILES:-[]}" | jq -r '.[]?'
+            )
+          fi
+
+          declare -a files=()
+          for f in "${candidates[@]+"${candidates[@]}"}"; do
+            if [[ -f "$f" ]]; then
+              files+=("$f")
+            else
+              echo "Skipping missing path: $f"
+            fi
+          done
+
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No environment files to test."
+            echo "has-files=false" >> "$GITHUB_OUTPUT"
+            echo 'files=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "Files to test:"
+            printf '  - %s\n' "${files[@]}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+          files_json=$(printf '%s\n' "${files[@]}" | jq -R . | jq -s -c .)
+          echo "has-files=true" >> "$GITHUB_OUTPUT"
+          echo "files=$files_json" >> "$GITHUB_OUTPUT"
+
+  test-env-files:
+    needs: detect
+    if: needs.detect.outputs.has-files == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        env_file: ${{ fromJson(needs.detect.outputs.files) }}
+    env:
+      MAMBA_NO_LOW_SPEED_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Create micromamba environment
+        uses: mamba-org/setup-micromamba@v3
+        with:
+          environment-file: ${{ matrix.env_file }}
+          environment-name: env-test
+          cache-environment: true
+
+      - name: Record success
+        run: |
+          echo "### \`${{ matrix.env_file }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Created successfully with micromamba" >> "$GITHUB_STEP_SUMMARY"
