@@ -37,8 +37,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determine effective test_all
+        # A caller-supplied `test_all: true` only takes effect on an actual
+        # manual run (workflow_dispatch). This way, callers that hardcode
+        # `test_all: true` for push/pull_request triggers (instead of only
+        # for workflow_dispatch) still get changed-files-only behavior there,
+        # without needing to be fixed individually.
+        id: effective
+        shell: bash
+        run: |
+          if [[ "${{ inputs.test_all }}" == "true" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Detect changed environment files
-        if: ${{ inputs.test_all == false }}
+        if: ${{ steps.effective.outputs.value == 'false' }}
         uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -51,7 +66,7 @@ jobs:
       - name: Build test matrix
         id: files
         env:
-          TEST_ALL: ${{ inputs.test_all }}
+          TEST_ALL: ${{ steps.effective.outputs.value }}
           CHANGED_FILES: ${{ steps.filter.outputs.env_files_files }}
           ENV_DIR: ${{ inputs.environment_dir }}
         shell: bash
