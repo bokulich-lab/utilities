@@ -58,9 +58,15 @@ jobs:
 
       - name: Get last commit
         id: get-commit-msg
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          # Get commit message and escape potential special characters
-          commit_msg=$(git log --pretty=%B -n 1 --skip 1 2>/dev/null)
+          # Read the message of the actual PR head / pushed commit directly,
+          # rather than relying on log position (HEAD is a synthetic merge
+          # commit on pull_request events, and "--skip 1" to unwrap it is not
+          # reliable since git log orders merge parents by commit date, not
+          # by branch).
+          commit_msg=$(git log -1 --pretty=%B "$COMMIT_SHA" 2>/dev/null)
           # Use proper delimiter for multiline strings in GitHub Actions
           echo "commit-msg<<EOF" >> $GITHUB_OUTPUT
           echo "$commit_msg" >> $GITHUB_OUTPUT
