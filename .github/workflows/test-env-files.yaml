@@ -137,6 +137,7 @@ jobs:
           environment-file: ${{ matrix.env_file }}
           environment-name: env-test
           cache-environment: true
+          micromamba-version: '2.4.0-0'
 
       - name: Record success
         run: |
