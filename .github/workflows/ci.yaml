@@ -103,41 +103,20 @@ jobs:
           echo "epoch=$tag_prefix" >> $GITHUB_OUTPUT
           echo "tag=$tag" >> $GITHUB_OUTPUT
 
-      - name: Setup miniconda
-        uses: conda-incubator/setup-miniconda@v4.0.1
+      - name: Setup micromamba
+        uses: mamba-org/setup-micromamba@v3
         with:
-          python-version: "3.12"
-          mamba-version: "*"
-          channels: conda-forge,defaults
-          channel-priority: true
-          activate-environment: conda-env
-          condarc-file: ./utilities/ci/condarc
-
-      - name: Get date
-        id: get-date
-        run: echo "today=$(/bin/date -u '+%Y%m%d')" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Cache conda env
-        uses: actions/cache@v5.0.5
-        with:
-          path: /usr/share/miniconda/envs
-          key:
-            conda-${{ runner.os }}--${{ runner.arch }}--${{
-            steps.get-date.outputs.today }}-${{
-            hashFiles('environment.yml') }}-${{ env.CACHE_NUMBER }}
-        env:
-          # Increase this value to reset cache if environment.yml has not changed
-          CACHE_NUMBER: 0
-        id: cache
-
-      - name: Update environment
-        run: conda env update -n conda-env -f environment.yml
-        if: steps.cache.outputs.cache-hit != 'true'
+          environment-file: environment.yml
+          environment-name: conda-env
+          cache-environment: true
+          micromamba-version: '2.4.0-1'
+          condarc: |
+            channel_priority: strict
+            default_threads: 2
 
       - name: Install dev versions of QIIME repos
         if: ${{ steps.create-conda-yaml.outputs.qiime-deps != '' && !contains(steps.get-commit-msg.outputs.commit-msg, '[stable]') && !contains(steps.get-commit-msg.outputs.commit-msg, '[prod]') }}
-        run: mamba run -n conda-env pip install ${{ steps.create-conda-yaml.outputs.qiime-deps }}
+        run: micromamba run -n conda-env pip install ${{ steps.create-conda-yaml.outputs.qiime-deps }}
 
       - name: Update specific dependency, if requested
         if: contains(${{ steps.get-commit-msg.outputs.commit-msg }}, '[add:')
@@ -149,21 +128,21 @@ jobs:
                 commit_hash=$(echo "$i" | awk -F':' '/\[add/{print $3}' | awk -F']' '{print $1}')
                 if [[ $(yq '.repositories[].name' ./utilities/ci/repositories.yaml | grep -c $pkg_name) -eq 1 ]]; then
                     pkg_url=$(yq ".repositories[] | select(.name == \"$pkg_name\") | .url" utilities/ci/repositories.yaml | tr -d '"')
-                    mamba run -n conda-env pip install "git+$pkg_url@$commit_hash"
+                    micromamba run -n conda-env pip install "git+$pkg_url@$commit_hash"
                 fi
             done
 
       - name: Install plugin
         run: |
-          mamba run -n conda-env pip install .
-          mamba run -n conda-env qiime dev refresh-cache
+          micromamba run -n conda-env pip install .
+          micromamba run -n conda-env qiime dev refresh-cache
 
       - name: Install dev dependencies
-        run: mamba run -n conda-env pip install pytest pytest-cov coverage parameterized pytest-xdist
+        run: micromamba run -n conda-env pip install pytest pytest-cov coverage parameterized pytest-xdist
 
       - name: Run tests
         id: test
-        run: mamba run -n conda-env make test-cov
+        run: micromamba run -n conda-env make test-cov
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v7.0.0
