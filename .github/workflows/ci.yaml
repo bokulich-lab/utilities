@@ -77,6 +77,8 @@ jobs:
 
       - name: Fetch latest tags
         id: fetch-tags
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           latest_tags=$(python ./utilities/ci/get-tags.py)
           echo "$latest_tags" > tags.txt

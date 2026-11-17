@@ -5,7 +5,9 @@ import sys
 
 def get_latest_tags(repo):
     url = f'https://api.github.com/repos/{repo}/tags'
-    response = requests.get(url)
+    token = os.getenv('GITHUB_TOKEN')
+    headers = {'Authorization': f'Bearer {token}'} if token else {}
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     tags = response.json()
     return [tag['name'] for tag in tags]
